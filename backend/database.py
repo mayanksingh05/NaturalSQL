@@ -53,3 +53,29 @@ def create_sqlite_database(
     conn.close()
 
     return db_path
+
+
+def extract_schema(
+    db_path: str
+):
+    conn = sqlite3.connect(db_path)
+
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "PRAGMA table_info(data)"
+    )
+
+    columns = cursor.fetchall()
+
+    conn.close()
+
+    schema = []
+
+    for column in columns:
+        schema.append({
+            "name": column[1],
+            "type": column[2]
+        })
+
+    return schema

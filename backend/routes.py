@@ -4,8 +4,12 @@ from fastapi import File
 
 from pydantic import BaseModel
 
-from database import save_uploaded_file
-from database import create_sqlite_database
+from database import (
+    save_uploaded_file,
+    create_sqlite_database,
+    extract_schema
+)
+
 router = APIRouter()
 
 
@@ -19,11 +23,8 @@ def ask_question(
 ):
     return {
         "sql": """
-SELECT customer_name,
-       SUM(expense)
-FROM sales
-GROUP BY customer_name
-ORDER BY SUM(expense) DESC
+SELECT *
+FROM data
 LIMIT 10;
 """.strip()
     }
@@ -41,8 +42,13 @@ def upload_file(
         saved_path
     )
 
+    schema = extract_schema(
+        db_path
+    )
+
     return {
         "filename": file.filename,
         "database": db_path,
+        "schema": schema,
         "status": "indexed"
     }
