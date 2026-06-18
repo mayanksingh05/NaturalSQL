@@ -10,30 +10,23 @@ from database import (
     extract_schema
 )
 
+from sql_service import generate_sql
+
 router = APIRouter()
+
+CURRENT_SCHEMA = []
 
 
 class AskRequest(BaseModel):
     question: str
 
 
-@router.post("/ask")
-def ask_question(
-    request: AskRequest
-):
-    return {
-        "sql": """
-SELECT *
-FROM data
-LIMIT 10;
-""".strip()
-    }
-
-
 @router.post("/upload")
 def upload_file(
     file: UploadFile = File(...)
 ):
+    global CURRENT_SCHEMA
+
     saved_path = save_uploaded_file(
         file
     )
@@ -46,9 +39,20 @@ def upload_file(
         db_path
     )
 
+    CURRENT_SCHEMA = schema
+
     return {
         "filename": file.filename,
-        "database": db_path,
         "schema": schema,
         "status": "indexed"
     }
+
+
+@router.post("/ask")
+def ask_question(
+    request: AskRequest
+):
+    return generate_sql(
+        request.question,
+        CURRENT_SCHEMA
+    )
