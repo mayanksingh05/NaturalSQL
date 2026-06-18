@@ -5,7 +5,7 @@ from fastapi import File
 from pydantic import BaseModel
 
 from database import save_uploaded_file
-
+from database import create_sqlite_database
 router = APIRouter()
 
 
@@ -37,8 +37,12 @@ def upload_file(
         file
     )
 
+    db_path = create_sqlite_database(
+        saved_path
+    )
+
     return {
         "filename": file.filename,
-        "path": saved_path,
-        "status": "uploaded"
+        "database": db_path,
+        "status": "indexed"
     }
