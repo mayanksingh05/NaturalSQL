@@ -1,4 +1,5 @@
 from llm.prompt_builder import build_prompt
+from llm.ollama_provider import generate_sql_from_ollama
 
 
 def generate_sql(
@@ -10,6 +11,10 @@ def generate_sql(
         schema
     )
 
+    generated_sql = generate_sql_from_ollama(
+        prompt
+    )
+
     return {
-        "prompt": prompt
+        "sql": generated_sql
     }

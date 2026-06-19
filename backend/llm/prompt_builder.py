@@ -10,13 +10,18 @@ def build_prompt(
     )
 
     return f"""
-You are an expert SQL generator.
+You are an SQL generator.
+
+Return ONLY SQL.
 
 Rules:
-- Return only SQL
-- Use table name: data
-- Only generate SELECT statements
-- Do not explain anything
+- Use table name data
+- Use only columns from schema
+- Generate valid SQLite SQL
+- Never explain
+- Never use markdown
+- Never use code fences
+- Return only a SELECT statement
 
 Schema:
 {schema_text}
