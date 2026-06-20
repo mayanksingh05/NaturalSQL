@@ -1,31 +1,20 @@
 import requests
 
-
 class NaturalSQLAPI:
 
     BASE_URL = "http://127.0.0.1:8000"
 
     @classmethod
-    def ask_question(
-        cls,
-        question: str
-    ):
+    def ask_question(cls, question: str):
         response = requests.post(
             f"{cls.BASE_URL}/ask",
-            json={
-                "question": question
-            }
+            json={"question": question}
         )
-
         response.raise_for_status()
-
         return response.json()
 
     @classmethod
-    def upload_file(
-        cls,
-        uploaded_file
-    ):
+    def upload_file(cls, uploaded_file):
         response = requests.post(
             f"{cls.BASE_URL}/upload",
             files={
@@ -36,7 +25,17 @@ class NaturalSQLAPI:
                 )
             }
         )
-
         response.raise_for_status()
+        return response.json()
 
+    @classmethod
+    def execute_sql(cls, query: str):
+        response = requests.post(
+            f"{cls.BASE_URL}/execute",
+            json={"query": query}
+        )
+        
+        if response.status_code != 200:
+            raise Exception(response.json().get("detail", "Unknown error executing query"))
+            
         return response.json()
