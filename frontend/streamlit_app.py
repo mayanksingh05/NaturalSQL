@@ -16,15 +16,16 @@ apply_custom_css()
 # Session State
 if "messages" not in st.session_state:
     st.session_state.messages = []
-
 if "last_sql" not in st.session_state:
     st.session_state.last_sql = ""
-
 if "query_results" not in st.session_state:
     st.session_state.query_results = None
-
 if "error_message" not in st.session_state:
     st.session_state.error_message = None
+if "is_sql_valid" not in st.session_state:
+    st.session_state.is_sql_valid = True
+if "validation_message" not in st.session_state:
+    st.session_state.validation_message = ""
 
 # --- SIDEBAR ---
 with st.sidebar:
@@ -36,27 +37,39 @@ with st.sidebar:
     st.title("Settings")
 
     st.subheader("📁 Data Source")
-
     uploaded_file = st.file_uploader(
         "Upload CSV, Excel or SQLite DB",
         type=["csv", "xlsx", "db"]
     )
 
     if uploaded_file:
-        st.session_state.uploaded_file = uploaded_file
-
-        st.success(
-            f"Loaded: {uploaded_file.name}"
-        )
+        if "uploaded_file_name" not in st.session_state or st.session_state.uploaded_file_name != uploaded_file.name:
+            with st.spinner("Processing data..."):
+                try:
+                    NaturalSQLAPI.upload_file(uploaded_file)
+                    st.session_state.uploaded_file_name = uploaded_file.name
+                    st.session_state.uploaded_file = True
+                    st.success(f"Loaded: {uploaded_file.name}")
+                except Exception as e:
+                    st.error("Failed to upload file.")
+                    st.session_state.uploaded_file = False
+        else:
+            st.success(f"Loaded: {uploaded_file.name}")
     else:
-        st.session_state.uploaded_file = None
+        st.session_state.uploaded_file = False
+        st.session_state.pop("uploaded_file_name", None)
 
     st.subheader("🧠 Model")
-
-    st.selectbox(
+    
+    # Updated to match Product Spec
+    provider = st.radio(
         "Provider",
-        ["Ollama (Llama 3)", "Gemini 1.5 Pro"]
+        ["○ Latest Gemini (Premium)", "○ Use Your Own API Key"],
+        index=1
     )
+
+    if provider == "○ Use Your Own API Key":
+        gemini_key = st.text_input("Gemini API Key", type="password", placeholder="AIzaSy...")
 
     st.divider()
 
@@ -72,7 +85,6 @@ render_header()
 
 # Display chat history
 for message in st.session_state.messages:
-
     if message["role"] != "sql":
         chat_bubble(
             message["role"],
@@ -80,14 +92,10 @@ for message in st.session_state.messages:
         )
 
 # --- CHAT INPUT ---
-prompt = st.chat_input(
-    "Ask your data anything..."
-)
+prompt = st.chat_input("Ask your data anything...")
 
 if prompt and not st.session_state.uploaded_file:
-    st.warning(
-        "Please upload a CSV, Excel or SQLite database first."
-    )
+    st.warning("Please upload a CSV, Excel or SQLite database first.")
 
 elif prompt:
     # User Message
@@ -95,61 +103,57 @@ elif prompt:
         "role": "user",
         "content": prompt
     })
-
     chat_bubble("user", prompt)
 
     # SQL Generation
     with st.spinner("Generating SQL query..."):
+        try:
+            response = NaturalSQLAPI.ask_question(prompt)
+            generated_sql = response.get("sql", "")
+            
+            st.session_state.last_sql = generated_sql
+            st.session_state.is_sql_valid = response.get("is_valid", False)
+            st.session_state.validation_message = response.get("validation_message", "")
+            
+            # Reset previous state
+            st.session_state.query_results = None 
+            st.session_state.error_message = None
 
-        # response = NaturalSQLAPI.ask_question(prompt, schema_info)
-
-        response = NaturalSQLAPI.ask_question(prompt)
-        generated_sql = response["sql"]
-        st.session_state.last_sql = generated_sql
-
-        st.session_state.messages.append({
-            "role": "sql",
-            "content": generated_sql
-        })
-
-        st.rerun()
+            st.session_state.messages.append({
+                "role": "sql",
+                "content": generated_sql
+            })
+            st.rerun()
+        except Exception as e:
+            st.error("Error generating SQL. Please check backend connection.")
 
 # --- ACTION AREA ---
 if st.session_state.last_sql:
-
-    if sql_preview_area(st.session_state.last_sql):
-
-        with st.spinner("Executing query..."):
-
-            # result = NaturalSQLAPI.execute_sql(
-            #     st.session_state.last_sql
-            # )
-
-            mock_df = pd.DataFrame({
-                "product_name": [
-                    "Laptop",
-                    "Mouse",
-                    "Monitor",
-                    "Keyboard",
-                    "Desk"
-                ],
-                "sales": [
-                    12000,
-                    1500,
-                    4500,
-                    2000,
-                    7000
-                ]
-            })
-
-            st.session_state.query_results = mock_df
+    
+    # Validation Check
+    if not st.session_state.is_sql_valid:
+        st.error(f"⚠️ **Unsafe Query Detected:** {st.session_state.validation_message}")
+        st.code(st.session_state.last_sql, language="sql")
+        
+    else:
+        if sql_preview_area(st.session_state.last_sql):
+            with st.spinner("Executing query..."):
+                try:
+                    result = NaturalSQLAPI.execute_sql(st.session_state.last_sql)
+                    
+                    # Convert dict payload back to DataFrame for charts
+                    df = pd.DataFrame(result["data"])
+                    st.session_state.query_results = df
+                    st.session_state.error_message = None
+                except Exception as e:
+                    st.session_state.error_message = str(e)
 
 # --- RESULTS ---
-if st.session_state.query_results is not None:
+if st.session_state.error_message:
+    st.error(f"SQL Execution Error: {st.session_state.error_message}")
 
-    render_auto_chart(
-        st.session_state.query_results
-    )
+elif st.session_state.query_results is not None:
+    render_auto_chart(st.session_state.query_results)
 
     with st.expander("View Raw Data"):
         st.dataframe(
@@ -159,7 +163,4 @@ if st.session_state.query_results is not None:
 
 # Footer
 st.markdown("<br><br>", unsafe_allow_html=True)
-
-st.caption(
-    "Powered by NaturalSQL Engine • v1.0.2"
-)
+st.caption("Powered by NaturalSQL Engine • v1.1.0")
