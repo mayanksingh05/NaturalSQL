@@ -1,6 +1,6 @@
 import re
 from llm.prompt_builder import build_prompt
-from llm.ollama_provider import generate_sql_from_ollama
+from llm.gemini_provider import generate_sql_from_gemini
 
 def validate_sql(query: str) -> tuple[bool, str]:
     """Validates the generated SQL to ensure it is safe and is a SELECT statement."""
@@ -20,19 +20,32 @@ def validate_sql(query: str) -> tuple[bool, str]:
 
     return True, "Valid"
 
-def generate_sql(question: str, schema: list):
+def generate_sql(question: str, schema: list, api_key: str = None):
     prompt = build_prompt(question, schema)
     
-    # Ollama is kept here for development only, per your spec
-    generated_sql = generate_sql_from_ollama(prompt)
+    if not api_key:
+        return {
+            "sql": "",
+            "is_valid": False,
+            "validation_message": "Please provide a valid Gemini API Key."
+        }
 
-    # Clean up markdown formatting the LLM might add
-    cleaned_sql = generated_sql.replace("```sql", "").replace("```", "").strip()
+    try:
+        generated_sql = generate_sql_from_gemini(prompt, api_key)
 
-    is_valid, message = validate_sql(cleaned_sql)
+        # Clean up markdown formatting the LLM might add
+        cleaned_sql = generated_sql.replace("```sql", "").replace("```", "").strip()
 
-    return {
-        "sql": cleaned_sql,
-        "is_valid": is_valid,
-        "validation_message": message
-    }
+        is_valid, message = validate_sql(cleaned_sql)
+
+        return {
+            "sql": cleaned_sql,
+            "is_valid": is_valid,
+            "validation_message": message
+        }
+    except Exception as e:
+        return {
+            "sql": "",
+            "is_valid": False,
+            "validation_message": str(e)
+        }
