@@ -15,6 +15,7 @@ CURRENT_DB_PATH = None
 
 class AskRequest(BaseModel):
     question: str
+    api_key: str = None  # Added API Key field
 
 class ExecuteRequest(BaseModel):
     query: str
@@ -41,7 +42,8 @@ def upload_file(file: UploadFile = File(...)):
 
 @router.post("/ask")
 def ask_question(request: AskRequest):
-    return generate_sql(request.question, CURRENT_SCHEMA)
+    # Pass the API key to the SQL service
+    return generate_sql(request.question, CURRENT_SCHEMA, request.api_key)
 
 @router.post("/execute")
 def execute_sql_endpoint(request: ExecuteRequest):
