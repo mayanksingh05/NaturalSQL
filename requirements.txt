@@ -1,0 +1,17 @@
+# Backend Core
+fastapi==0.111.0
+uvicorn==0.30.1
+python-multipart==0.0.9
+pydantic==2.7.4
+
+# Data Processing
+pandas==2.2.2
+openpyxl==3.1.2
+
+# LLM & APIs
+google-generativeai==0.5.4
+requests==2.32.3
+
+# Frontend & Visualization
+streamlit==1.35.0
+plotly==5.22.0

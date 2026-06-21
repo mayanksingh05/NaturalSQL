@@ -61,13 +61,13 @@ with st.sidebar:
 
     st.subheader("🧠 Model")
     
-    # Updated to match Product Spec
     provider = st.radio(
         "Provider",
         ["○ Latest Gemini (Premium)", "○ Use Your Own API Key"],
         index=1
     )
 
+    gemini_key = None
     if provider == "○ Use Your Own API Key":
         gemini_key = st.text_input("Gemini API Key", type="password", placeholder="AIzaSy...")
 
@@ -98,42 +98,55 @@ if prompt and not st.session_state.uploaded_file:
     st.warning("Please upload a CSV, Excel or SQLite database first.")
 
 elif prompt:
-    # User Message
-    st.session_state.messages.append({
-        "role": "user",
-        "content": prompt
-    })
-    chat_bubble("user", prompt)
+    # Check for API key early
+    if provider == "○ Use Your Own API Key" and not gemini_key:
+        st.error("⚠️ Please enter your Gemini API Key in the sidebar.")
+    elif provider == "○ Latest Gemini (Premium)":
+        st.info("Premium provider is coming soon. Please use your own API key for now.")
+    else:
+        # User Message
+        st.session_state.messages.append({
+            "role": "user",
+            "content": prompt
+        })
+        chat_bubble("user", prompt)
 
-    # SQL Generation
-    with st.spinner("Generating SQL query..."):
-        try:
-            response = NaturalSQLAPI.ask_question(prompt)
-            generated_sql = response.get("sql", "")
-            
-            st.session_state.last_sql = generated_sql
-            st.session_state.is_sql_valid = response.get("is_valid", False)
-            st.session_state.validation_message = response.get("validation_message", "")
-            
-            # Reset previous state
-            st.session_state.query_results = None 
-            st.session_state.error_message = None
+        # SQL Generation
+        with st.spinner("Analyzing data with Gemini..."):
+            try:
+                response = NaturalSQLAPI.ask_question(prompt, gemini_key)
+                
+                generated_sql = response.get("sql", "")
+                
+                st.session_state.last_sql = generated_sql
+                st.session_state.is_sql_valid = response.get("is_valid", False)
+                st.session_state.validation_message = response.get("validation_message", "")
+                
+                # Reset previous state
+                st.session_state.query_results = None 
+                st.session_state.error_message = None
 
-            st.session_state.messages.append({
-                "role": "sql",
-                "content": generated_sql
-            })
-            st.rerun()
-        except Exception as e:
-            st.error("Error generating SQL. Please check backend connection.")
+                if not st.session_state.is_sql_valid and not generated_sql:
+                     # This catches API key errors or LLM failures
+                     st.error(f"Error: {st.session_state.validation_message}")
+                else:
+                    st.session_state.messages.append({
+                        "role": "sql",
+                        "content": generated_sql
+                    })
+                    st.rerun()
+                    
+            except Exception as e:
+                st.error("Error connecting to backend API.")
 
 # --- ACTION AREA ---
 if st.session_state.last_sql:
     
     # Validation Check
     if not st.session_state.is_sql_valid:
-        st.error(f"⚠️ **Unsafe Query Detected:** {st.session_state.validation_message}")
-        st.code(st.session_state.last_sql, language="sql")
+        st.error(f"⚠️ **Issue Detected:** {st.session_state.validation_message}")
+        if st.session_state.last_sql:
+            st.code(st.session_state.last_sql, language="sql")
         
     else:
         if sql_preview_area(st.session_state.last_sql):
@@ -141,7 +154,6 @@ if st.session_state.last_sql:
                 try:
                     result = NaturalSQLAPI.execute_sql(st.session_state.last_sql)
                     
-                    # Convert dict payload back to DataFrame for charts
                     df = pd.DataFrame(result["data"])
                     st.session_state.query_results = df
                     st.session_state.error_message = None
@@ -163,4 +175,4 @@ elif st.session_state.query_results is not None:
 
 # Footer
 st.markdown("<br><br>", unsafe_allow_html=True)
-st.caption("Powered by NaturalSQL Engine • v1.1.0")
+st.caption("Powered by NaturalSQL Engine • BYOK Enabled")
