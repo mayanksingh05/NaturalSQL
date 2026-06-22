@@ -31,6 +31,7 @@ def generate_sql(question: str, schema: list, api_key: str = None):
         }
 
     try:
+        # Strictly using Gemini Provider now
         generated_sql = generate_sql_from_gemini(prompt, api_key)
 
         # Clean up markdown formatting the LLM might add
