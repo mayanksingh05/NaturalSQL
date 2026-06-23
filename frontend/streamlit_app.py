@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import uuid
 from ui_components import apply_custom_css, render_header, chat_bubble, sql_preview_area
 from api_client import NaturalSQLAPI
 from charts import render_auto_chart
@@ -13,9 +14,14 @@ st.set_page_config(
 
 apply_custom_css()
 
-# Session State
+# --- ISOLATED SESSION STATE ---
+# We generate a unique ID for every single browser tab
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "schema_data" not in st.session_state:
+    st.session_state.schema_data = [] # Schema lives here now, not globally in backend
 if "last_sql" not in st.session_state:
     st.session_state.last_sql = ""
 if "query_results" not in st.session_state:
@@ -44,14 +50,16 @@ with st.sidebar:
 
     if uploaded_file:
         if "uploaded_file_name" not in st.session_state or st.session_state.uploaded_file_name != uploaded_file.name:
-            with st.spinner("Processing data..."):
+            with st.spinner("Processing securely..."):
                 try:
-                    NaturalSQLAPI.upload_file(uploaded_file)
+                    # Passing session_id to backend
+                    upload_res = NaturalSQLAPI.upload_file(uploaded_file, st.session_state.session_id)
+                    st.session_state.schema_data = upload_res.get("schema", [])
                     st.session_state.uploaded_file_name = uploaded_file.name
                     st.session_state.uploaded_file = True
-                    st.success(f"Loaded: {uploaded_file.name}")
+                    st.success(f"Loaded and secured for this session: {uploaded_file.name}")
                 except Exception as e:
-                    st.error("Failed to upload file.")
+                    st.error(f"Failed to upload file: {str(e)}")
                     st.session_state.uploaded_file = False
         else:
             st.success(f"Loaded: {uploaded_file.name}")
@@ -70,6 +78,7 @@ with st.sidebar:
     gemini_key = None
     if provider == "○ Use Your Own API Key":
         gemini_key = st.text_input("Gemini API Key", type="password", placeholder="AIzaSy...")
+        st.caption("🔒 Key is kept entirely in memory and wiped when you close the tab.")
 
     st.divider()
 
@@ -114,7 +123,13 @@ elif prompt:
         # SQL Generation
         with st.spinner("Analyzing data with Gemini..."):
             try:
-                response = NaturalSQLAPI.ask_question(prompt, gemini_key)
+                # Passing key, session_id, and schema_data explicitly
+                response = NaturalSQLAPI.ask_question(
+                    prompt, 
+                    gemini_key, 
+                    st.session_state.session_id, 
+                    st.session_state.schema_data
+                )
                 
                 generated_sql = response.get("sql", "")
                 
@@ -137,7 +152,7 @@ elif prompt:
                     st.rerun()
                     
             except Exception as e:
-                st.error("Error connecting to backend API.")
+                st.error(f"Error connecting to backend API: {str(e)}")
 
 # --- ACTION AREA ---
 if st.session_state.last_sql:
@@ -152,7 +167,8 @@ if st.session_state.last_sql:
         if sql_preview_area(st.session_state.last_sql):
             with st.spinner("Executing query..."):
                 try:
-                    result = NaturalSQLAPI.execute_sql(st.session_state.last_sql)
+                    # Pass session ID so the backend queries the correct isolated DB
+                    result = NaturalSQLAPI.execute_sql(st.session_state.last_sql, st.session_state.session_id)
                     
                     df = pd.DataFrame(result["data"])
                     st.session_state.query_results = df
@@ -175,4 +191,4 @@ elif st.session_state.query_results is not None:
 
 # Footer
 st.markdown("<br><br>", unsafe_allow_html=True)
-st.caption("Powered by NaturalSQL Engine • BYOK Enabled")
+st.caption("Powered by NaturalSQL Engine • Session Secured")
