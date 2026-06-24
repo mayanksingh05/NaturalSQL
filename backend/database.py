@@ -5,7 +5,7 @@ import shutil
 from fastapi import UploadFile, HTTPException
 
 UPLOAD_DIR = "uploads"
-MAX_STORAGE_MB = 400 # Leave some buffer for the 500MB Render limit
+MAX_STORAGE_MB = 100 # Reduced to 100MB to insulate Render instance from high traffic disk consumption
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -13,8 +13,11 @@ def check_disk_space():
     """Checks if the backend has enough space to accept new files."""
     total, used, free = shutil.disk_usage("/")
     free_mb = free / (1024 * 1024)
-    if free_mb < 50: # If less than 50MB remaining
-        raise HTTPException(status_code=503, detail="Service temporarily unavailable: Storage capacity reached. Please try again later.")
+    if free_mb < 50: # If total server space drops below 50MB
+        raise HTTPException(
+            status_code=503, 
+            detail="Service temporarily unavailable: Storage capacity reached. Please try again later."
+        )
 
 def save_uploaded_file(file: UploadFile, session_id: str):
     check_disk_space()
@@ -42,10 +45,8 @@ def create_sqlite_database(file_path: str, session_id: str):
             df.to_sql("data", conn, if_exists="replace", index=False)
             
         elif file_path.endswith(".xlsx"):
-            # sheet_name=None loads ALL sheets as a dictionary of DataFrames
             dfs = pd.read_excel(file_path, sheet_name=None)
             for sheet_name, df in dfs.items():
-                # Clean sheet names to be safe SQL table names
                 safe_name = "".join(e for e in sheet_name if e.isalnum() or e == "_")
                 df.to_sql(safe_name, conn, if_exists="replace", index=False)
         
@@ -58,7 +59,6 @@ def extract_schema(db_path: str):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
-    # Get all tables
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
     tables = cursor.fetchall()
     
@@ -79,8 +79,7 @@ def extract_schema(db_path: str):
 
 def execute_query(db_path: str, query: str):
     try:
-        # We connect with check_same_thread=False for concurrency, 
-        # and open in read-only mode (mode=ro) using a URI to prevent ANY data modification
+        # Enforce read-only state at runtime level via URI configuration
         uri = f"file:{db_path}?mode=ro"
         conn = sqlite3.connect(uri, uri=True, check_same_thread=False)
         df = pd.read_sql_query(query, conn)
