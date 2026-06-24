@@ -42,8 +42,10 @@ with st.sidebar:
     st.title("Settings")
 
     st.subheader("📁 Data Source")
+    
+    # Streamlit will now automatically read the 100MB limit from config.toml
     uploaded_file = st.file_uploader(
-        "Upload CSV, Excel or SQLite DB (Max 100MB)",
+        "Upload CSV, Excel or SQLite DB",
         type=["csv", "xlsx", "db"]
     )
 
@@ -88,7 +90,6 @@ with st.sidebar:
         st.rerun()
 
 # --- MAIN UI ---
-# Display Header and Tagline at the very top
 st.markdown("## ⚡ NaturalSQL")
 st.caption("Your data. Plain English. Instant insights.")
 st.divider()
@@ -104,11 +105,29 @@ for message in st.session_state.messages:
 # --- CHAT INPUT ---
 prompt = st.chat_input("Ask your data anything...")
 
-# Modern Centered Disclaimer Subtext (Directly under Input)
+# --- CUSTOM FOOTER INJECTION ---
+# This CSS forces the text to the absolute bottom of the screen, below the chat input
 st.markdown(
-    "<div style='text-align: center; color: #888888; font-size: 0.78rem; margin-top: 6px; margin-bottom: 20px;'>"
-    "Powered by NaturalSQL Engine • Session Secured • Gemini can make mistakes."
-    "</div>", 
+    """
+    <style>
+    .custom-footer {
+        position: fixed;
+        bottom: 5px;
+        left: 0;
+        width: 100%;
+        text-align: center;
+        color: #888888;
+        font-size: 0.75rem;
+        z-index: 999999;
+        pointer-events: none;
+    }
+    /* Add padding to the chat input container so the text doesn't overlap the box */
+    [data-testid="stChatInput"] {
+        padding-bottom: 25px;
+    }
+    </style>
+    <div class='custom-footer'>Powered by NaturalSQL Engine • Session Secured</div>
+    """, 
     unsafe_allow_html=True
 )
 
