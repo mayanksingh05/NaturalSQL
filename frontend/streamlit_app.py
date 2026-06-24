@@ -8,20 +8,19 @@ from charts import render_auto_chart
 # Page Config
 st.set_page_config(
     page_title="NaturalSQL | AI Data Analyst",
-    page_icon="🪄",
+    page_icon="⚡",
     layout="wide"
 )
 
 apply_custom_css()
 
 # --- ISOLATED SESSION STATE ---
-# We generate a unique ID for every single browser tab
 if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "schema_data" not in st.session_state:
-    st.session_state.schema_data = [] # Schema lives here now, not globally in backend
+    st.session_state.schema_data = []
 if "last_sql" not in st.session_state:
     st.session_state.last_sql = ""
 if "query_results" not in st.session_state:
@@ -44,7 +43,7 @@ with st.sidebar:
 
     st.subheader("📁 Data Source")
     uploaded_file = st.file_uploader(
-        "Upload CSV, Excel or SQLite DB",
+        "Upload CSV, Excel or SQLite DB (Max 100MB)",
         type=["csv", "xlsx", "db"]
     )
 
@@ -52,7 +51,6 @@ with st.sidebar:
         if "uploaded_file_name" not in st.session_state or st.session_state.uploaded_file_name != uploaded_file.name:
             with st.spinner("Processing securely..."):
                 try:
-                    # Passing session_id to backend
                     upload_res = NaturalSQLAPI.upload_file(uploaded_file, st.session_state.session_id)
                     st.session_state.schema_data = upload_res.get("schema", [])
                     st.session_state.uploaded_file_name = uploaded_file.name
@@ -90,7 +88,10 @@ with st.sidebar:
         st.rerun()
 
 # --- MAIN UI ---
-render_header()
+# Display Header and Tagline at the very top
+st.markdown("## ⚡ NaturalSQL")
+st.caption("Your data. Plain English. Instant insights.")
+st.divider()
 
 # Display chat history
 for message in st.session_state.messages:
@@ -103,27 +104,31 @@ for message in st.session_state.messages:
 # --- CHAT INPUT ---
 prompt = st.chat_input("Ask your data anything...")
 
+# Modern Centered Disclaimer Subtext (Directly under Input)
+st.markdown(
+    "<div style='text-align: center; color: #888888; font-size: 0.78rem; margin-top: 6px; margin-bottom: 20px;'>"
+    "Powered by NaturalSQL Engine • Session Secured • Gemini can make mistakes."
+    "</div>", 
+    unsafe_allow_html=True
+)
+
 if prompt and not st.session_state.uploaded_file:
     st.warning("Please upload a CSV, Excel or SQLite database first.")
 
 elif prompt:
-    # Check for API key early
     if provider == "○ Use Your Own API Key" and not gemini_key:
         st.error("⚠️ Please enter your Gemini API Key in the sidebar.")
     elif provider == "○ Latest Gemini (Premium)":
         st.info("Premium provider is coming soon. Please use your own API key for now.")
     else:
-        # User Message
         st.session_state.messages.append({
             "role": "user",
             "content": prompt
         })
         chat_bubble("user", prompt)
 
-        # SQL Generation
         with st.spinner("Analyzing data with Gemini..."):
             try:
-                # Passing key, session_id, and schema_data explicitly
                 response = NaturalSQLAPI.ask_question(
                     prompt, 
                     gemini_key, 
@@ -132,17 +137,14 @@ elif prompt:
                 )
                 
                 generated_sql = response.get("sql", "")
-                
                 st.session_state.last_sql = generated_sql
                 st.session_state.is_sql_valid = response.get("is_valid", False)
                 st.session_state.validation_message = response.get("validation_message", "")
                 
-                # Reset previous state
                 st.session_state.query_results = None 
                 st.session_state.error_message = None
 
                 if not st.session_state.is_sql_valid and not generated_sql:
-                     # This catches API key errors or LLM failures
                      st.error(f"Error: {st.session_state.validation_message}")
                 else:
                     st.session_state.messages.append({
@@ -156,20 +158,15 @@ elif prompt:
 
 # --- ACTION AREA ---
 if st.session_state.last_sql:
-    
-    # Validation Check
     if not st.session_state.is_sql_valid:
         st.error(f"⚠️ **Issue Detected:** {st.session_state.validation_message}")
         if st.session_state.last_sql:
             st.code(st.session_state.last_sql, language="sql")
-        
     else:
         if sql_preview_area(st.session_state.last_sql):
             with st.spinner("Executing query..."):
                 try:
-                    # Pass session ID so the backend queries the correct isolated DB
                     result = NaturalSQLAPI.execute_sql(st.session_state.last_sql, st.session_state.session_id)
-                    
                     df = pd.DataFrame(result["data"])
                     st.session_state.query_results = df
                     st.session_state.error_message = None
@@ -188,7 +185,3 @@ elif st.session_state.query_results is not None:
             st.session_state.query_results,
             use_container_width=True
         )
-
-# Footer
-st.markdown("<br><br>", unsafe_allow_html=True)
-st.caption("Powered by NaturalSQL Engine • Session Secured")
