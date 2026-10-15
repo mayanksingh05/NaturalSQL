@@ -4,11 +4,14 @@ __pycache__/
 
 .env
 
-.streamlit/
+# Streamlit secrets (keep config.toml tracked)
+.streamlit/secrets.toml
 
 uploads/
 temp.db
 *.db
+*.sqlite
+*.sqlite3
 
 .vscode/
 .idea/

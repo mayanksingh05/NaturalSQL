@@ -43,10 +43,9 @@ with st.sidebar:
 
     st.subheader("📁 Data Source")
     
-    # Streamlit will now automatically read the 100MB limit from config.toml
     uploaded_file = st.file_uploader(
         "Upload CSV, Excel or SQLite DB",
-        type=["csv", "xlsx", "db"]
+        type=["csv", "xlsx", "xls", "db", "sqlite"]
     )
 
     if uploaded_file:
@@ -57,28 +56,35 @@ with st.sidebar:
                     st.session_state.schema_data = upload_res.get("schema", [])
                     st.session_state.uploaded_file_name = uploaded_file.name
                     st.session_state.uploaded_file = True
-                    st.success(f"Loaded and secured for this session: {uploaded_file.name}")
+                    st.success(f"Loaded: {uploaded_file.name}")
                 except Exception as e:
                     st.error(f"Failed to upload file: {str(e)}")
                     st.session_state.uploaded_file = False
         else:
             st.success(f"Loaded: {uploaded_file.name}")
+            
+        # Display schema overview so users know available tables and columns
+        if st.session_state.schema_data:
+            with st.expander("📋 View Tables & Columns", expanded=False):
+                tables = {}
+                for col in st.session_state.schema_data:
+                    tables.setdefault(col.get("table", "data"), []).append(col["name"])
+                for t_name, cols in tables.items():
+                    st.markdown(f"**Table: `{t_name}`**")
+                    st.caption(", ".join(cols))
     else:
         st.session_state.uploaded_file = False
         st.session_state.pop("uploaded_file_name", None)
+        st.session_state.schema_data = []
 
-    st.subheader("🧠 Model")
-    
-    provider = st.radio(
-        "Provider",
-        ["○ Latest Gemini (Premium)", "○ Use Your Own API Key"],
-        index=1
+    st.subheader("🔑 Gemini API Key")
+    gemini_key = st.text_input(
+        "Enter your Gemini API Key",
+        type="password",
+        placeholder="AIzaSy...",
+        help="Get a free key at https://aistudio.google.com/app/apikey"
     )
-
-    gemini_key = None
-    if provider == "○ Use Your Own API Key":
-        gemini_key = st.text_input("Gemini API Key", type="password", placeholder="AIzaSy...")
-        st.caption("🔒 Key is kept entirely in memory and wiped when you close the tab.")
+    st.caption("🔒 Key stays in memory only and is never stored on the server. [Get free Gemini key →](https://aistudio.google.com/app/apikey)")
 
     st.divider()
 
@@ -106,7 +112,6 @@ for message in st.session_state.messages:
 prompt = st.chat_input("Ask your data anything...")
 
 # --- CUSTOM FOOTER INJECTION ---
-# This CSS forces the text to the absolute bottom of the screen, below the chat input
 st.markdown(
     """
     <style>
@@ -121,24 +126,21 @@ st.markdown(
         z-index: 999999;
         pointer-events: none;
     }
-    /* Add padding to the chat input container so the text doesn't overlap the box */
     [data-testid="stChatInput"] {
         padding-bottom: 25px;
     }
     </style>
-    <div class='custom-footer'>Powered by NaturalSQL Engine • Session Secured</div>
+    <div class='custom-footer'>Powered by NaturalSQL Engine • Bring Your Own Key • Session Secured</div>
     """, 
     unsafe_allow_html=True
 )
 
 if prompt and not st.session_state.uploaded_file:
-    st.warning("Please upload a CSV, Excel or SQLite database first.")
+    st.warning("Please upload a CSV, Excel or SQLite database in the sidebar first.")
 
 elif prompt:
-    if provider == "○ Use Your Own API Key" and not gemini_key:
-        st.error("⚠️ Please enter your Gemini API Key in the sidebar.")
-    elif provider == "○ Latest Gemini (Premium)":
-        st.info("Premium provider is coming soon. Please use your own API key for now.")
+    if not gemini_key or not gemini_key.strip():
+        st.error("⚠️ Please enter your Gemini API Key in the sidebar. [Get a free key from Google AI Studio →](https://aistudio.google.com/app/apikey)")
     else:
         st.session_state.messages.append({
             "role": "user",
@@ -150,7 +152,7 @@ elif prompt:
             try:
                 response = NaturalSQLAPI.ask_question(
                     prompt, 
-                    gemini_key, 
+                    gemini_key.strip(), 
                     st.session_state.session_id, 
                     st.session_state.schema_data
                 )
@@ -173,7 +175,7 @@ elif prompt:
                     st.rerun()
                     
             except Exception as e:
-                st.error(f"Error connecting to backend API: {str(e)}")
+                st.error(f"Error: {str(e)}")
 
 # --- ACTION AREA ---
 if st.session_state.last_sql:
@@ -199,7 +201,18 @@ if st.session_state.error_message:
 elif st.session_state.query_results is not None:
     render_auto_chart(st.session_state.query_results)
 
-    with st.expander("View Raw Data"):
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        csv_data = st.session_state.query_results.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="📥 Download CSV",
+            data=csv_data,
+            file_name="query_results.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+
+    with st.expander("View Raw Data", expanded=True):
         st.dataframe(
             st.session_state.query_results,
             use_container_width=True
