@@ -13,6 +13,12 @@ temp.db
 *.sqlite
 *.sqlite3
 
+# Local documents, PDFs & study materials
+*.pdf
+INTERVIEW_PREP.md
+implementation plan.md
+scripts/
+
 .vscode/
 .idea/
 
